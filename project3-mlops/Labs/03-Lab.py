@@ -34,10 +34,10 @@
 # COMMAND ----------
 
 path = f"{workingDir}/03-lab/"
-
+ 
 dbutils.fs.rm(path, True) # Clears the directory if it already exists
 dbutils.fs.mkdirs(path)
-
+ 
 print("Created directory `{}` to house the project files.".format(path))
 
 # COMMAND ----------
@@ -58,9 +58,17 @@ print("Created directory `{}` to house the project files.".format(path))
 #  TODO
 dbutils.fs.put(path + "MLproject", 
 '''
+name: Lab-03
 
-  FILL_IN
+conda_env: conda.yaml
 
+entry_points:
+  main:
+    parameters:
+      data_path: {type: str, default: "/dbfs/mnt/training/airbnb/sf-listings/airbnb-cleaned-mlflow.csv"}
+      bootstrap: {type: bool, default: True}
+      min_impurity_decrease: {type: float, default: 0}
+    command: "python train.py --data_path {data_path} --bootstrap{bootstrap} --min_impurity_decrease{min_impurity_decrease}"
 '''.strip())
 
 # COMMAND ----------
@@ -79,13 +87,24 @@ dbutils.fs.put(path + "MLproject",
 
 # COMMAND ----------
 
-#  TODO
-dbutils.fs.put(path + "conda.yaml", 
-'''
+import cloudpickle, numpy, pandas, sklearn
 
-  FILL_IN
+file_contents = f"""
+name: Lab-03
+channels:
+  - defaults
+dependencies:
+  - cloudpickle={cloudpickle.__version__}
+  - numpy={numpy.__version__}
+  - pandas={pandas.__version__}
+  - scikit-learn={sklearn.__version__}
+  - pip:
+    - mlflow=={mlflow.__version__}
+""".strip()
 
-'''.strip())
+dbutils.fs.put(f"{workingDir}/03-lab/conda.yaml", file_contents, overwrite = True)
+print(f"{workingDir}/03-lab/conda.yaml")
+print(file_contents)
 
 # COMMAND ----------
 
@@ -99,10 +118,45 @@ dbutils.fs.put(path + "conda.yaml",
 #  TODO
 dbutils.fs.put(path + "train.py", 
 '''
-
-  FILL_IN
-  
-'''.strip())
+import click
+import mlflow.sklearn
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.model_selection import train_test_split
+ 
+@click.command()
+@click.option("--data_path", default="/dbfs/mnt/training/airbnb/sf-listings/airbnb-cleaned-mlflow.csv", type=str)
+@click.option("--bootstrap", default=True, type=bool)
+@click.option("--min_impurity_decrease", default=0, type=float)
+ 
+def mlflow_rf(data_path, bootstrap, min_impurity_decrease):
+ 
+  with mlflow.start_run() as run:
+    # Import the data
+    df = pd.read_csv(data_path)
+    X_train, X_test, y_train, y_test = train_test_split(df.drop(["price"], axis=1), df[["price"]].values.ravel(), random_state=42)
+    
+    # Create model, train it, and create predictions
+    rf = RandomForestRegressor(bootstrap=bootstrap, min_impurity_decrease=min_impurity_decrease)
+    rf.fit(X_train, y_train)
+    predictions = rf.predict(X_test)
+ 
+    # Log model
+    mlflow.sklearn.log_model(rf, "random-forest-model")
+    
+    # Log params
+    mlflow.log_param("bootstrap", bootstrap)
+    mlflow.log_param("min_impurity_decrease", min_impurity_decrease)
+ 
+    # Log metrics
+    mlflow.log_metric("mse", mean_squared_error(y_test, predictions))
+    mlflow.log_metric("mae", mean_absolute_error(y_test, predictions))  
+    mlflow.log_metric("r2", r2_score(y_test, predictions))  
+ 
+if __name__ == "__main__":
+  mlflow_rf() 
+'''.strip(), True)
 
 # COMMAND ----------
 
@@ -123,7 +177,7 @@ dbutils.fs.ls(path)
 # COMMAND ----------
 
 import mlflow
-
+ 
 mlflow.projects.run(uri=path.replace("dbfs:","/dbfs"),
   parameters={
     "data_path": "/dbfs/mnt/training/airbnb/sf-listings/airbnb-cleaned-mlflow.csv",

@@ -54,14 +54,16 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV
 
 # dictionary containing hyperparameter names and list of values we want to try
-parameters = {'n_estimators': #FILL_IN , 
-              'max_depth': #FILL_IN }
+parameters = {'n_estimators': (100,1000), 
+              'max_depth': (5,10) }
 
 rf = RandomForestRegressor()
 grid_rf_model = GridSearchCV(rf, parameters, cv=3)
 grid_rf_model.fit(X_train, y_train)
 
 best_rf = grid_rf_model.best_estimator_
+best_params =  best_rf.get_params()
+print(best_params)
 for p in parameters:
   print("Best '{}': {}".format(p, best_rf.get_params()[p]))
 
@@ -76,22 +78,59 @@ for p in parameters:
 
 # TODO
 from sklearn.metrics import mean_squared_error
-
-with mlflow.start_run(run_name= FILL_IN) as run:
-  # Create predictions of X_test using best model
-  # FILL_IN
-  
-  # Log model with name
-  # FILL_IN
-  
-  # Log params
-  # FILL_IN
+import tempfile
+import seaborn as sns
+import matplotlib.pyplot as plt
+with mlflow.start_run(run_name= "RF-Grid-Search") as run:
+    # Create predictions of X_test using best model
+    predictions = best_rf.predict(X_test)
+    # Log model with name
+    mlflow.sklearn.log_model(best_rf, "grid-random-forest-model")
+    # Log params
+    mlflow.log_params(best_params)
   
   # Create and log MSE metrics using predictions of X_test and its actual value y_test
-  # FILL_IN
+    mse = mean_squared_error(y_test, predictions)
+    print(f"mse: {mse}")
+    # FILL_IN
+    mlflow.log_metric("RF-Grid-Search_mse", mse)
+    # Create feature importance
+    importance = pd.DataFrame(list(zip(df.columns, best_rf.feature_importances_)), 
+                                columns=["Feature", "Importance"]
+                              ).sort_values("Importance", ascending=False)
+    
+    # Log importances using a temporary file
+    temp = tempfile.NamedTemporaryFile(prefix="feature-importance-", suffix=".csv")
+    temp_name = temp.name
+    try:
+        importance.to_csv(temp_name, index=False)
+        mlflow.log_artifact(temp_name, "feature-importance.csv")
+    finally:
+          temp.close() # Delete the temp file
+    
+    # Create plot
+    fig, ax = plt.subplots()
+
+    sns.residplot(predictions, y_test, lowess=True)
+    plt.xlabel("Predicted values")
+    plt.ylabel("Residual")
+    plt.title("Residual Plot")
+
+    # Log residuals using a temporary file
+    temp = tempfile.NamedTemporaryFile(prefix="residuals-", suffix=".png")
+    temp_name = temp.name
+    try:
+        fig.savefig(temp_name)
+        mlflow.log_artifact(temp_name, "residuals.png")
+    finally:
+          temp.close() # Delete the temp file
+      
+    display(fig)
   
-  runID = run.info.run_uuid
-  print("Inside MLflow Run with id {}".format(runID))
+  
+    runID = run.info.run_uuid
+    experimentID = run.info.experiment_id
+    print("Inside MLflow Run with id {}".format(runID))
 
 # COMMAND ----------
 
@@ -110,7 +149,13 @@ with mlflow.start_run(run_name= FILL_IN) as run:
 # COMMAND ----------
 
 # TODO
-model = < FILL_IN >
+from  mlflow.tracking import MlflowClient
+
+client = MlflowClient()
+runs = client.search_runs(experimentID, order_by=["attributes.start_time desc"], max_results=1)
+runs[0].data.metrics
+artifactURI = 'runs:/'+runs[0].info.run_id+"/grid-random-forest-model"
+model = mlflow.sklearn.load_model(artifactURI) #< FILL_IN >
 
 # COMMAND ----------
 
@@ -120,6 +165,24 @@ model = < FILL_IN >
 # COMMAND ----------
 
 # TODO
+# TODO
+import mlflow.sklearn
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import GridSearchCV
+
+# dictionary containing hyperparameter names and list of values we want to try
+parameters = {'n_estimators': (50,100,200,300,400,500,600,700,800,900,1000), 
+              'max_depth': (5,7,10,12,14,15) }
+rf = RandomForestRegressor()
+grid_rf_model = GridSearchCV(rf, parameters, cv=3)
+grid_rf_model.fit(X_train, y_train)
+
+best_rf = grid_rf_model.best_estimator_
+best_params =  best_rf.get_params()
+print(best_params)
+for p in parameters:
+  print("Best '{}': {}".format(p, best_rf.get_params()[p]))
+
 
 # COMMAND ----------
 
@@ -129,6 +192,70 @@ model = < FILL_IN >
 # COMMAND ----------
 
 # TODO
+# TODO
+from sklearn.metrics import mean_squared_error
+import tempfile
+import seaborn as sns
+import matplotlib.pyplot as plt
+with mlflow.start_run(run_name= "RF-Grid-Search") as run:
+    # Create predictions of X_test using best model
+    predictions = best_rf.predict(X_test)
+    # Log model with name
+    mlflow.sklearn.log_model(best_rf, "grid-random-forest-model")
+    # Log params
+    mlflow.log_params(best_params)
+  
+  # Create and log MSE metrics using predictions of X_test and its actual value y_test
+    mse = mean_squared_error(y_test, predictions)
+    print(f"mse: {mse}")
+    # FILL_IN
+    mlflow.log_metric("RF-Grid-Search_mse", mse)
+    # Create feature importance
+    importance = pd.DataFrame(list(zip(df.columns, best_rf.feature_importances_)), 
+                                columns=["Feature", "Importance"]
+                              ).sort_values("Importance", ascending=False)
+    
+    # Log importances using a temporary file
+    temp = tempfile.NamedTemporaryFile(prefix="feature-importance-", suffix=".csv")
+    temp_name = temp.name
+    try:
+        importance.to_csv(temp_name, index=False)
+        mlflow.log_artifact(temp_name, "feature-importance.csv")
+    finally:
+          temp.close() # Delete the temp file
+    
+    # Create plot
+    fig, ax = plt.subplots()
+
+    sns.residplot(predictions, y_test, lowess=True)
+    plt.xlabel("Predicted values")
+    plt.ylabel("Residual")
+    plt.title("Residual Plot")
+
+    # Log residuals using a temporary file
+    temp = tempfile.NamedTemporaryFile(prefix="residuals-", suffix=".png")
+    temp_name = temp.name
+    try:
+        fig.savefig(temp_name)
+        mlflow.log_artifact(temp_name, "residuals.png")
+    finally:
+          temp.close() # Delete the temp file
+      
+    display(fig)
+  
+  
+    runID = run.info.run_uuid
+    experimentID = run.info.experiment_id
+    print("Inside MLflow Run with id {}".format(runID))
+
+# TODO
+from  mlflow.tracking import MlflowClient
+
+client = MlflowClient()
+runs = client.search_runs(experimentID, order_by=["attributes.start_time desc"], max_results=1)
+runs[0].data.metrics
+artifactURI = 'runs:/'+runs[0].info.run_id+"/grid-random-forest-model"
+model = mlflow.sklearn.load_model(artifactURI) #< FILL_IN >
 
 # COMMAND ----------
 
